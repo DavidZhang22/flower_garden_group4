@@ -155,10 +155,10 @@ class Gardener4(Gardener):
 
                 IC = self._intersecting(x, y, r, placed)
                 score = self._score_candidate(x, y, r, placed)
-                #random.shuffle(self.ALL_SPECIES)
+                random.shuffle(self.ALL_SPECIES)
                 for sk in self.ALL_SPECIES:
-                    #if not self._has_radius(inv, sk, r):
-                        #continue
+                    if not self._has_radius(inv, sk, r):
+                        continue
                     missing_filled = self._missing_filled(IC, sk)
                     options.append((missing_filled, score, r, sk, x, y))
 
