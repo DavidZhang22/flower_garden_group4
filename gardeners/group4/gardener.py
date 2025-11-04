@@ -3,6 +3,7 @@ import random
 from collections import defaultdict
 from dataclasses import dataclass
 
+from core.engine import Engine
 from core.garden import Garden
 from core.gardener import Gardener
 from core.plants.plant_variety import PlantVariety
@@ -130,7 +131,7 @@ class Gardener4(Gardener):
         return x, y
 
     def _place_from(
-        self, anchor: Placed, inv: dict[str, list[PlantVariety]], placed: list[Placed]
+        self, anchor: Placed, inv: dict[str, list[PlantVariety]], placed: list[Placed], angle_steps: int
     ) -> Placed | None:
         # Gather all candidate (dir, r) positions + per-species options (only if inventory has that radius)
         options: list[tuple[int, float, int, str, int, int]] = []
@@ -139,7 +140,7 @@ class Gardener4(Gardener):
         for r in self.RADS:
 
             #choose points around the anchor
-            angle_steps = 1440
+            # angle_steps = 1440
 
             d = max(anchor.r, r)
 
@@ -154,10 +155,10 @@ class Gardener4(Gardener):
 
                 IC = self._intersecting(x, y, r, placed)
                 score = self._score_candidate(x, y, r, placed)
-                random.shuffle(self.ALL_SPECIES)
+                #random.shuffle(self.ALL_SPECIES)
                 for sk in self.ALL_SPECIES:
-                    if not self._has_radius(inv, sk, r):
-                        continue
+                    #if not self._has_radius(inv, sk, r):
+                        #continue
                     missing_filled = self._missing_filled(IC, sk)
                     options.append((missing_filled, score, r, sk, x, y))
 
@@ -235,18 +236,100 @@ class Gardener4(Gardener):
         # intialize largest at (w/2,h/2). In the future when plant varieties are imbalanced,
         # preplacing lacking varieties spread out around the middle might be helpful
 
-        self.varieties.sort(key=lambda v: v.radius)
-        # self.sort_plants_score()
+        #self.varieties.sort(key=lambda v: v.radius)
+        
+        max_total_growth = 0
+        max_angle_steps = 0
+        #best_garden = self.garden
+        for i in range (1, 100):
+            angle_steps = 8*i
+            self.sort_plants_score()
+            inv = self._split_by_species(self.varieties[1:])
+            seed = self.varieties[0]
+            if self.garden.add_plant(seed, Position(self.W / 2, self.H / 2)) is not None:
+                seed_node = Placed(
+                    self.W / 2, self.H / 2, int(seed.radius), seed.species, defaultdict(int)
+            )
+
+            placed = [seed_node]
+            placeable = [seed_node]
+
+            while placeable and len(placed) < len(self.varieties):
+
+                def missing_species_count(node: Placed) -> int:
+                    """Return how many required species this node is still missing."""
+                    required = {'RHODODENDRON', 'GERANIUM', 'BEGONIA'} - {node.species.name}
+                    missing = sum(1 for s in required if node.inter_count.get(s, 0) == 0)
+                    return missing
+
+                def remaining_for_species(sk: str) -> int:
+                    # total remaining varieties for this species across all radii
+                    arr = inv.get(sk, [])
+                    return len(arr)
+
+                # prioritize nodes missing the most species, then those with fewest interactions
+                placeable.sort(
+                    key=lambda n: (
+                        missing_species_count(n),
+                        -remaining_for_species(n.species.name),
+                        sum(n.inter_count.values()),
+                    )
+                )
+
+                anchor = placeable[0]
+                new_node = self._place_from(anchor, inv, placed, angle_steps)
+                if new_node is None:
+                    placeable.pop(0)
+                    continue
+                placeable.append(new_node)
+
+            species_counts = defaultdict(int)
+            for p in placed:
+                species_counts[p.species.name] += 1
+            turns = 200
+            total_growth = self.simulate_total_score(turns)
+            if total_growth is not None and total_growth > max_total_growth:
+                max_total_growth = total_growth
+                print(max_total_growth)
+                max_angle_steps = angle_steps
+                print(max_angle_steps)
+            
+            print(
+                f'angle steps: {angle_steps}, '
+                f'Current totals — '
+                f'Rhododendron: {species_counts["RHODODENDRON"]}, '
+                f'Geranium: {species_counts["GERANIUM"]}, '
+                f'Begonia: {species_counts["BEGONIA"]}, '
+                f'Total: {len(placed)}'
+            )
+            print('-' * 60)
+            #print(self.garden.plants)
+            self.garden.plants = []
+            self.garden._used_varieties = set()
+        print("made it to chosen garden")
+        self.chosen_garden(max_angle_steps)
+        print(max_angle_steps)
+        #print(best_garden)
+        #self.garden = best_garden
+
+    
+    def simulate_total_score(self, turns: int) -> float:
+        engine = Engine(self.garden)
+        growth_history = engine.run_simulation(turns)
+        #print(growth_history[-1])
+        return growth_history[-1]
+    
+    def chosen_garden(self, angle_steps: int):
+        print(angle_steps)
+        self.sort_plants_score()
         inv = self._split_by_species(self.varieties[1:])
         seed = self.varieties[0]
         if self.garden.add_plant(seed, Position(self.W / 2, self.H / 2)) is not None:
             seed_node = Placed(
                 self.W / 2, self.H / 2, int(seed.radius), seed.species, defaultdict(int)
-            )
-
+        )
         placed = [seed_node]
         placeable = [seed_node]
-
         while placeable and len(placed) < len(self.varieties):
 
             def missing_species_count(node: Placed) -> int:
@@ -270,7 +353,7 @@ class Gardener4(Gardener):
             )
 
             anchor = placeable[0]
-            new_node = self._place_from(anchor, inv, placed)
+            new_node = self._place_from(anchor, inv, placed, angle_steps)
             if new_node is None:
                 placeable.pop(0)
                 continue
