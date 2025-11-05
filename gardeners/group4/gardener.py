@@ -240,8 +240,11 @@ class Gardener4(Gardener):
         
         max_total_growth = 0
         max_angle_steps = 0
+        early_stopping = 10
         #best_garden = self.garden
-        for i in range (1, 100):
+        for i in range (1, 40):
+            if early_stopping <= 0:
+                break
             angle_steps = 8*i
             self.sort_plants_score()
             inv = self._split_by_species(self.varieties[1:])
@@ -293,6 +296,9 @@ class Gardener4(Gardener):
                 print(max_total_growth)
                 max_angle_steps = angle_steps
                 print(max_angle_steps)
+                early_stopping = 10
+            else:
+                early_stopping -= 1
             
             print(
                 f'angle steps: {angle_steps}, '
